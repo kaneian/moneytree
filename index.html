@@ -69,6 +69,7 @@ h1,h2,h3{font-family:var(--display);font-weight:400;text-transform:uppercase;let
 .btn.ghost{background:rgba(18,10,32,.5);border:1px solid var(--line);color:var(--haze);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .btn.ghost:hover{border-color:var(--lagoon);color:var(--lagoon)}
 .btn[aria-disabled=true]{opacity:.55}
+.btn:disabled{opacity:.5;cursor:default;box-shadow:none;transform:none}
 .btn.small{padding:9px 14px;font-size:13px}
 
 .tagline{position:absolute;z-index:4;left:0;right:0;bottom:26px;margin:0;padding:0 24px;text-align:center;white-space:nowrap;pointer-events:none;font-style:italic;line-height:1.1;font-size:clamp(22px,2.42vw,46px);filter:drop-shadow(0 3px 16px rgba(18,10,32,.95))}
@@ -286,7 +287,7 @@ footer{padding:28px 0 46px;color:var(--muted);font-size:14px;border-top:1px soli
       </div>
       <div class="card depbar" style="order:3">
         <span><span id="depLabel">No deposits found yet</span><strong class="num" id="unclaimed">$0</strong></span>
-        <button class="btn primary small" id="claimBtn" disabled>Open account to claim</button>
+        <button class="btn primary small" id="claimBtn">Preview account opening</button>
       </div>
     </div>
   </div></section>
@@ -716,26 +717,26 @@ document.addEventListener('click',e=>{ if(e.target.closest('[data-daily]')) clai
 function render(){
   document.querySelectorAll('[data-daily]').forEach(b=>{ const done=S.daily===today(); b.textContent=done?'Free clicks claimed today':'Claim '+CONFIG.dailyFreeClicks+' free clicks'; b.setAttribute('aria-disabled',done); });
   $('clicks').textContent=S.clicks; const dv=S.kyc?S.deposited:S.unclaimed; $('unclaimed').textContent=money(dv,dv%1?2:0);
-  $('depLabel').textContent=S.kyc?'In your account at '+SP.name:S.unclaimed>0?'Deposits waiting for you':'No deposits found yet'; $('claimBtn').disabled=S.kyc||S.unclaimed<=0; $('claimBtn').textContent=S.kyc?'Account linked':'Open account to claim';
+  $('depLabel').textContent=S.kyc?'In your account at '+SP.name:S.unclaimed>0?'Deposits waiting for you':'No deposits found yet'; $('claimBtn').disabled=S.kyc; $('claimBtn').textContent=S.kyc?'Account linked':S.unclaimed>0?'Open account to claim':'Preview account opening';
   $('walletBtn').textContent=S.kyc?'Wallet linked':S.wallet?'Demo wallet on':'Connect wallet';
   $('roundLine').textContent='Round '+S.round+' · '+Object.keys(S.prizes).length+' deposits buried · funded by '+SP.name;
 }
 
 /* ============ winner onboarding: account opening (KYC) with the sponsoring bank, simulated ============ */
-const SP=CONFIG.sponsor; let obStep=0;
+const SP=CONFIG.sponsor; let obStep=0, obPreview=false;   // preview: walk the flow with a sample deposit, changing nothing
 function credit(){ if(S.unclaimed<=0) return; const v=S.unclaimed; S.deposited+=v; S.unclaimed=0; sfx('claim'); toast(money(v,v%1?2:0)+' added to your account at '+SP.name+'.'); render(); }
-function openOnboard(){ if(S.unclaimed<=0) return; if(S.kyc){ credit(); return; } obStep=0; drawOnboard(); $('onboard').hidden=false; document.body.style.overflow='hidden'; }
+function openOnboard(){ if(S.kyc){ credit(); return; } obPreview=S.unclaimed<=0; obStep=0; drawOnboard(); $('onboard').hidden=false; document.body.style.overflow='hidden'; }
 function closeOnboard(){ $('onboard').hidden=true; document.body.style.overflow=''; render(); }
 function drawOnboard(){
-  const amt=money(S.unclaimed,S.unclaimed%1?2:0), b=$('obBody');
+  const amt=obPreview?'$20':money(S.unclaimed,S.unclaimed%1?2:0), b=$('obBody'), fin=obPreview?'$20':money(S.deposited,S.deposited%1?2:0);
   $('obProg').innerHTML=[0,1,2,3,4].map(i=>'<i class="'+(i<=obStep?'on':'')+'"></i>').join('');
-  const later='<button class="btn ghost small" data-ob="close">Finish later</button>';
+  const later='<button class="btn ghost small" data-ob="close">'+(obPreview?'Close preview':'Finish later')+'</button>';
   b.innerHTML=[
-    '<div class="eyebrow">Funded by '+SP.name+'</div><h2 id="obTitle" class="vice">You found a deposit</h2><div class="obAmt num">'+amt+'</div><p>This is a tokenized deposit held for you at '+SP.name+'. Open an account with them to receive it. It takes a few minutes and one identity check.</p><div class="row"><button class="btn primary" data-ob="next">Open my account</button>'+later+'</div>',
+    '<div class="eyebrow">'+(obPreview?'Preview · sample deposit · funded by ':'Funded by ')+SP.name+'</div><h2 id="obTitle" class="vice">You found a deposit</h2><div class="obAmt num">'+amt+'</div><p>This is a tokenized deposit held for you at '+SP.name+'. Open an account with them to receive it. It takes a few minutes and one identity check.</p><div class="row"><button class="btn primary" data-ob="next">Open my account</button>'+later+'</div>',
     '<div class="eyebrow">Step 1 of 3 · Your details</div><h2 id="obTitle">Tell '+SP.short+' who you are</h2><form class="obForm" id="obForm"><label for="obName">Full legal name<input id="obName" autocomplete="off" placeholder="As shown on your ID"></label><label for="obDob">Date of birth<input id="obDob" type="date"></label><label for="obAddr">Home address<input id="obAddr" autocomplete="off" placeholder="Street, city, postcode"></label><label for="obEmail">Email<input id="obEmail" type="email" autocomplete="off" placeholder="you@example.com"></label><label class="chk" for="obOk"><input id="obOk" type="checkbox"> I agree to open an account with '+SP.name+' and to its account terms.</label></form><p class="fine">Demo: you can leave these blank. Nothing you type is stored or sent.</p><div class="row"><button class="btn primary" data-ob="next">Continue</button>'+later+'</div>',
     '<div class="eyebrow">Step 2 of 3 · Identity check</div><h2 id="obTitle">Verify it is you</h2><ul class="obChecks"><li id="obC0">Photo ID</li><li id="obC1">Selfie match</li><li id="obC2">Sanctions and eligibility screening</li></ul><p class="fine">Demo: no camera or document is used. The checks below are simulated.</p><div class="row"><button class="btn primary" data-ob="verify">Run the check</button>'+later+'</div>',
     '<div class="eyebrow">Step 3 of 3 · Wallet</div><h2 id="obTitle">Link your wallet</h2><p>Your wallet becomes the key to your new account. Your tokenized deposit shows up in it, and stays a deposit at '+SP.name+'.</p><div class="row"><button class="btn primary" data-ob="link">'+(S.wallet?'Link my demo wallet':'Connect a demo wallet')+'</button>'+later+'</div>',
-    '<div class="eyebrow">Account open</div><h2 id="obTitle" class="vice">Welcome to '+SP.name+'</h2><div class="obAmt num">'+money(S.deposited,S.deposited%1?2:0)+'</div><dl class="obSum"><div><dt>Account</dt><dd>Demo account, verified</dd></div><div><dt>Wallet</dt><dd>Demo wallet, linked</dd></div><div><dt>Balance</dt><dd class="num">'+money(S.deposited,S.deposited%1?2:0)+' tokenized deposit</dd></div></dl><p>Any deposit you find from now on goes straight into this account.</p><div class="row"><button class="btn primary" data-ob="close">Keep digging</button></div>'
+    '<div class="eyebrow">'+(obPreview?'Preview complete':'Account open')+'</div><h2 id="obTitle" class="vice">Welcome to '+SP.name+'</h2><div class="obAmt num">'+fin+'</div><dl class="obSum"><div><dt>Account</dt><dd>Demo account, verified</dd></div><div><dt>Wallet</dt><dd>Demo wallet, linked</dd></div><div><dt>Balance</dt><dd class="num">'+fin+' tokenized deposit</dd></div></dl><p>'+(obPreview?'That was a preview with a sample deposit, so nothing was added. Find a real one on the tree to open your account.':'Any deposit you find from now on goes straight into this account.')+'</p><div class="row"><button class="btn primary" data-ob="close">'+(obPreview?'Back to the tree':'Keep digging')+'</button></div>'
   ][obStep];
   const f=b.querySelector('button'); if(f) f.focus();
 }
@@ -744,6 +745,7 @@ $('onboard').addEventListener('click',e=>{
   if(k==='close') closeOnboard();
   else if(k==='next'){ sfx('tick'); obStep++; drawOnboard(); }
   else if(k==='verify'){ a.disabled=true; a.textContent='Checking…'; [0,1,2].forEach(i=>setTimeout(()=>{ const el=$('obC'+i); if(el){ el.classList.add('ok'); sfx('tick'); } },500+i*600)); setTimeout(()=>{ if(obStep===2&&!$('onboard').hidden){ obStep=3; drawOnboard(); } },2500); }
+  else if(k==='link'&&obPreview){ obStep=4; sfx('prize'); drawOnboard(); }
   else if(k==='link'){ S.wallet=true; S.kyc=true; const v=S.unclaimed; S.deposited+=v; S.unclaimed=0; obStep=4; sfx('prize'); drawOnboard(); render(); }
 });
 $('obBody').addEventListener('submit',e=>e.preventDefault());
